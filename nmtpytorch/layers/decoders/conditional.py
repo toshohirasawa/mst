@@ -236,7 +236,10 @@ class ConditionalDecoder(nn.Module):
         loss = 0.0
 
         wait_k = 4
-        wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
+        if 'image' in ctx_dict:
+            wait_k_ctx_dict = {key: [value[0][:wait_k], value[1]] for key, value in ctx_dict.items()}
+        else:
+            wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
 
         # Get initial hidden state
         h = self.f_init(wait_k_ctx_dict)
@@ -254,7 +257,10 @@ class ConditionalDecoder(nn.Module):
 
         for t in range(y_emb.shape[0] - 1):
             wait_k += 1
-            wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
+            if 'image' in ctx_dict:
+                wait_k_ctx_dict = {key: [value[0][:wait_k], value[1]] for key, value in ctx_dict.items()}
+            else:
+                wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
             emb = self.emb(log_p.argmax(1)) if sched else y_emb[t]
             log_p, h = self.f_next(wait_k_ctx_dict, emb, h)
             loss += self.nll_loss(log_p, y[t + 2])
