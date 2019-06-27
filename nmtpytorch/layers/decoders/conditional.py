@@ -235,8 +235,11 @@ class ConditionalDecoder(nn.Module):
 
         loss = 0.0
 
+        wait_k = 4
+        wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
+
         # Get initial hidden state
-        h = self.f_init(ctx_dict)
+        h = self.f_init(wait_k_ctx_dict)
 
         # are we doing scheduled sampling?
         sched = self.training and (random.random() > (1 - self.sched_sample))
@@ -244,13 +247,16 @@ class ConditionalDecoder(nn.Module):
         # Convert token indices to embeddings -> T*B*E
         # Skip <bos> now
         bos = self.get_emb(y[0], 0)
-        log_p, h = self.f_next(ctx_dict, bos, h)
+        log_p, h = self.f_next(wait_k_ctx_dict, bos, h)
+        #log_p, h = self.f_next(ctx_dict, bos, h)
         loss += self.nll_loss(log_p, y[1])
         y_emb = self.emb(y[1:])
 
         for t in range(y_emb.shape[0] - 1):
+            wait_k += 1
+            wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
             emb = self.emb(log_p.argmax(1)) if sched else y_emb[t]
-            log_p, h = self.f_next(ctx_dict, emb, h)
+            log_p, h = self.f_next(wait_k_ctx_dict, emb, h)
             loss += self.nll_loss(log_p, y[t + 2])
 
         return {'loss': loss}
