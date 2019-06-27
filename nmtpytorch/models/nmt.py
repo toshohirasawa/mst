@@ -29,6 +29,7 @@ class NMT(nn.Module):
             'enc_dim': 256,             # Encoder hidden size
             'enc_type': 'gru',          # Encoder type (gru|lstm)
             'enc_lnorm': False,         # Add layer-normalization to encoder output
+            'bidirectional': False,
             'n_encoders': 1,            # Number of stacked encoders
             'dec_dim': 256,             # Decoder hidden size
             'dec_type': 'gru',          # Decoder type (gru|lstm)
@@ -58,6 +59,7 @@ class NMT(nn.Module):
             'bos_type': 'emb',          # 'emb': default learned emb
             'bos_activ': None,          #
             'bos_dim': None,            #
+            'wait_k': None,            #
         }
 
     def __init__(self, opts):
@@ -101,7 +103,10 @@ class NMT(nn.Module):
         # Textual context size is always equal to enc_dim * 2 since
         # it is the concatenation of forward and backward hidden states
         if 'enc_dim' in self.opts.model:
-            self.ctx_sizes = {str(self.sl): self.opts.model['enc_dim'] * 2}
+            if self.opts.model['bidirectional'] == True:
+                self.ctx_sizes = {str(self.sl): self.opts.model['enc_dim'] * 2}
+            else:
+                self.ctx_sizes = {str(self.sl): self.opts.model['enc_dim']}
 
         # Check vocabulary sizes for 3way tying
         if self.opts.model['tied_emb'] not in [False, '2way', '3way']:
@@ -153,7 +158,8 @@ class NMT(nn.Module):
             num_layers=self.opts.model['n_encoders'],
             emb_maxnorm=self.opts.model['emb_maxnorm'],
             emb_gradscale=self.opts.model['emb_gradscale'],
-            layer_norm=self.opts.model['enc_lnorm'])
+            layer_norm=self.opts.model['enc_lnorm'],
+            bidirectional=self.opts.model['bidirectional'])
 
         ################
         # Create Decoder
@@ -182,7 +188,8 @@ class NMT(nn.Module):
             sched_sample=self.opts.model['sched_sampling'],
             bos_type=self.opts.model['bos_type'],
             bos_dim=self.opts.model['bos_dim'],
-            bos_activ=self.opts.model['bos_activ'])
+            bos_activ=self.opts.model['bos_activ'],
+            wait_k=self.opts.model['wait_k'])
 
         # Share encoder and decoder weights
         if self.opts.model['tied_emb'] == '3way':

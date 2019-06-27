@@ -136,7 +136,7 @@ class Translator:
         hyps = beam_search(self.instances, loader, task_id=self.task_id,
                            beam_size=self.beam_size, max_len=self.max_len,
                            lp_alpha=self.lp_alpha, suppress_unk=self.suppress_unk,
-                           n_best=self.n_best)
+                           n_best=self.n_best, wait_k=self.wait_k)
         up_time = time.time() - start
         logger.info('Took {:.3f} seconds, {} sent/sec'.format(
             up_time, math.floor(len(hyps) / up_time)))

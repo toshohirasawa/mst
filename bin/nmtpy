@@ -3,12 +3,18 @@
 import os
 import sys
 import argparse
+import subprocess
 
 from nmtpytorch import logger
 from nmtpytorch.config import Options
 from nmtpytorch.utils.misc import setup_experiment, fix_seed
 from nmtpytorch.utils.device import DeviceManager
 
+def get_branch_hash():
+    git_dir = '/'.join(__file__.split('/')[:-2] + ['.git'])
+    process = subprocess.Popen(['git', f'--git-dir={git_dir}', 'rev-parse', 'HEAD'], shell=False, stdout=subprocess.PIPE)
+    branch_hash = process.communicate()[0].strip()
+    return branch_hash.decode('utf-8')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -17,6 +23,9 @@ if __name__ == '__main__':
         description="nmtpy trains/translates/tests a given "
                     "configuration/checkpoint/snapshot",
         argument_default=argparse.SUPPRESS)
+
+    # debug
+    parser.add_argument('--debug', action='store_true', default=False, help='Remote debug mode')
 
     subparsers = parser.add_subparsers(dest='cmd', title='sub-commands',
                                        description='Valid sub-commands')
@@ -48,6 +57,8 @@ if __name__ == '__main__':
                               help='Batch size for beam-search')
     parser_trans.add_argument('-k', '--beam-size', type=int, default=6,
                               help='Beam size for beam-search')
+    parser_trans.add_argument('-w', '--wait-k', default=None,
+                              help='Wait-k size')
     parser_trans.add_argument('-m', '--max-len', type=int, default=200,
                               help='Maximum sequence length to produce (Default: 200)')
     parser_trans.add_argument('-a', '--lp-alpha', type=float, default=0.,
@@ -97,6 +108,22 @@ if __name__ == '__main__':
 
     # Parse command-line arguments first
     args = parser.parse_args()
+
+    # enable remote debug first
+    if args.debug:
+        import ptvsd
+        from time import sleep
+
+        remote_port = os.environ.get('PTVSD_PORT', 13000)
+        print(f'Waiting for attachment (port: {remote_port}) ...', end='', flush=True)
+
+        ptvsd.enable_attach(address=('0.0.0.0', remote_port))
+        ptvsd.wait_for_attach()
+
+        # waiting for attachment completion
+        sleep(2)
+        print('Attached')
+
     if args.cmd is None:
         parser.print_help()
         sys.exit(1)
@@ -152,7 +179,7 @@ if __name__ == '__main__':
     log.info("Python {} -- torch {} with CUDA {} (on machine '{}')".format(
         platform.python_version(), torch.__version__,
         torch.version.cuda, platform.node()))
-    log.info("nmtpytorch {}".format(nmtpytorch.__version__))
+    log.info("nmtpytorch {} (Branch: {})".format(nmtpytorch.__version__, get_branch_hash()))
     log.info(dev_mgr)
     log.info("Seed for further reproducibility: {}".format(opts.train['seed']))
 

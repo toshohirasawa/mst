@@ -6,3 +6,4 @@ build/
 dist/
 docs/build/
 ipynb/.ipynb_checkpoints
+.vscode/

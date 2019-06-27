@@ -19,7 +19,7 @@ class ConditionalDecoder(nn.Module):
                  att_activ='tanh', att_bottleneck='ctx', att_temp=1.0,
                  transform_ctx=True, mlp_bias=False, dropout_out=0,
                  emb_maxnorm=None, emb_gradscale=False, sched_sample=0,
-                 bos_type='emb', bos_dim=None, bos_activ=None, bos_bias=False):
+                 bos_type='emb', bos_dim=None, bos_activ=None, bos_bias=False, wait_k=None):
         super().__init__()
 
         # Normalize case
@@ -71,6 +71,7 @@ class ConditionalDecoder(nn.Module):
         self.bos_dim = bos_dim
         self.bos_activ = bos_activ
         self.bos_bias = bos_bias
+        self.wait_k = wait_k
 
         if self.bos_type == 'feats':
             # Learn a <bos> embedding
@@ -182,23 +183,33 @@ class ConditionalDecoder(nn.Module):
         # For other timesteps, look up the embedding layer
         return self.emb(idxs)
 
-    def f_init(self, ctx_dict):
+    def _wait_k_encoder_hidden_states(self, ctx_dict, wait_k):
+        if 'image' in ctx_dict:
+            mask = ctx_dict[self.ctx_name][1] if ctx_dict[self.ctx_name][1] is None else ctx_dict[self.ctx_name][1][:wait_k]
+            return {self.ctx_name: [ctx_dict[self.ctx_name][0][:wait_k], mask], 'image': ctx_dict['image']}
+        else:
+            return {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
+
+    def f_init(self, ctx_dict, wait_k):
         """Returns the initial h_0 for the decoder."""
+        wait_k_ctx_dict = self._wait_k_encoder_hidden_states(ctx_dict, wait_k)
         self.history = defaultdict(list)
         # Compute <bos> out of 'feats' if requested
         if self.bos_type == 'feats':
-            self.bos = self.ff_bos(ctx_dict['feats'][0])
-        return self._init_func(ctx_dict)
+            self.bos = self.ff_bos(wait_k_ctx_dict['feats'][0])
+        return self._init_func(wait_k_ctx_dict)
 
-    def f_next(self, ctx_dict, y, h):
+    def f_next(self, ctx_dict, y, h, wait_k):
         """Applies one timestep of recurrence."""
+
+        wait_k_ctx_dict = self._wait_k_encoder_hidden_states(ctx_dict, wait_k)
         # Get hidden states from the first decoder (purely cond. on LM)
         h1_c1 = self.dec0(y, self._rnn_unpack_states(h))
         h1 = get_rnn_hidden_state(h1_c1)
 
         # Apply attention
         txt_alpha_t, txt_z_t = self.att(
-            h1.unsqueeze(0), *ctx_dict[self.ctx_name])
+            h1.unsqueeze(0), *wait_k_ctx_dict[self.ctx_name])
 
         if not self.training:
             self.history['alpha_txt'].append(txt_alpha_t)
@@ -234,9 +245,10 @@ class ConditionalDecoder(nn.Module):
         """
 
         loss = 0.0
+        wait_k = self.wait_k
 
         # Get initial hidden state
-        h = self.f_init(ctx_dict)
+        h = self.f_init(ctx_dict, wait_k)
 
         # are we doing scheduled sampling?
         sched = self.training and (random.random() > (1 - self.sched_sample))
@@ -244,13 +256,15 @@ class ConditionalDecoder(nn.Module):
         # Convert token indices to embeddings -> T*B*E
         # Skip <bos> now
         bos = self.get_emb(y[0], 0)
-        log_p, h = self.f_next(ctx_dict, bos, h)
+        log_p, h = self.f_next(ctx_dict, bos, h, wait_k)
         loss += self.nll_loss(log_p, y[1])
         y_emb = self.emb(y[1:])
 
         for t in range(y_emb.shape[0] - 1):
+            if wait_k is not None:
+                wait_k += 1
             emb = self.emb(log_p.argmax(1)) if sched else y_emb[t]
-            log_p, h = self.f_next(ctx_dict, emb, h)
+            log_p, h = self.f_next(ctx_dict, emb, h, wait_k)
             loss += self.nll_loss(log_p, y[t + 2])
 
         return {'loss': loss}

@@ -11,13 +11,15 @@ from nmtpytorch.translator import Translator
 from nmtpytorch.utils.data import make_dataloader
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         prog='nmtpy-dump-attention',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="generate attention pkl",
         argument_default=argparse.SUPPRESS)
+
+    # debug
+    parser.add_argument('--debug', action='store_true', default=False, help='Remote debug mode')
 
     parser.add_argument('-m', '--model', type=str, required=True,
                         help=".ckpt model file")
@@ -26,7 +28,29 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str,
                        help='output file name.')
 
+    # Visualize attention
+    parser.add_argument('--image_split', required=False, type=str,
+                       help='image-split file name')
+    parser.add_argument('--images', required=False, type=str,
+                       help='images directory')
+
     args = parser.parse_args()
+
+    # enable remote debug first
+    if args.debug:
+        import ptvsd
+        from time import sleep
+
+        remote_port = os.environ.get('PTVSD_PORT', 13000)
+        print(f'Waiting for attachment (port: {remote_port}) ...', end='', flush=True)
+
+        ptvsd.enable_attach(address=('0.0.0.0', remote_port))
+        ptvsd.wait_for_attach()
+
+        # waiting for attachment completion
+        sleep(2)
+        print('Attached')
+
     translator = Translator(models=[args.model], splits=args.split,
                             source=None, disable_filters=True, override=None,
                             task_id=None)
@@ -39,8 +63,12 @@ if __name__ == '__main__':
 
     torch.set_grad_enabled(False)
 
+    wait_k = getattr(model.dec, 'wait_k', None)
+
     # Greedy search
     for batch in tqdm.tqdm(loader, unit='batch'):
+        this_wait_k = wait_k
+
         # Visual attention (may not be available)
         img_att = [[] for i in range(batch.size)]
 
@@ -56,13 +84,17 @@ if __name__ == '__main__':
         ctx_dict = model.encode(batch)
 
         # Get initial hidden state
-        h_t = model.dec.f_init(ctx_dict)
+        h_t = model.dec.f_init(ctx_dict, wait_k=this_wait_k)
 
-        y_t = model.get_bos(batch.size)
+        y_t = model.get_bos(batch.size).unsqueeze(1)
 
         # Iterate for 100 timesteps
         for t in range(100):
-            logp, h_t = model.dec.f_next(ctx_dict, model.dec.get_emb(y_t, t).squeeze(), h_t)
+            if this_wait_k is not None:
+                this_wait_k += 1
+
+            emb_y_t = model.dec.get_emb(y_t, t).squeeze(1)
+            logp, h_t = model.dec.f_next(ctx_dict, emb_y_t , h_t, wait_k=this_wait_k)
 
             # text attention
             tatt = model.dec.txt_alpha_t.data.clone().numpy()
@@ -97,6 +129,7 @@ if __name__ == '__main__':
             if fini.sum() == batch.size:
                 break
 
+
         for h, sa, ia, ha in zip(hyps, main_att, img_att, hie_att):
             d = {
                 'hyp': model.trg_vocab.idxs_to_sent(h),
@@ -107,8 +140,9 @@ if __name__ == '__main__':
             data.append(d)
 
     # Put into correct order
-    data = [data[i] for i, j in sorted(
-        enumerate(loader.batch_sampler.orig_idxs), key=lambda k: k[1])]
+    if hasattr(loader.batch_sampler, 'orig_idxs'):
+        data = [data[i] for i, j in sorted(
+            enumerate(loader.batch_sampler.orig_idxs), key=lambda k: k[1])]
 
     src_lines = []
     with open(model.opts.data['{}_set'.format(args.split)][model.sl]) as sf:

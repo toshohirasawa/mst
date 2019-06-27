@@ -22,7 +22,7 @@ def check_context_ndims(ctx_dict):
 
 
 def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
-                lp_alpha=0., suppress_unk=False, n_best=False):
+                lp_alpha=0., suppress_unk=False, n_best=False, wait_k=None):
     """An efficient implementation for beam-search algorithm.
 
     Arguments:
@@ -52,6 +52,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
     max_batch_size = data_loader.batch_sampler.batch_size
     k = beam_size
     inf = -1000
+    init_wait_k = int(wait_k) if wait_k != "None" and wait_k != None else None
     results = []
     enc_args = {}
 
@@ -87,6 +88,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
     nll_storage = torch.zeros(max_batch_size, device=DEVICE)
 
     for batch in pbar(data_loader, unit='batch'):
+        wait_k = init_wait_k
         batch.device(DEVICE)
 
         # Always use the initial storage
@@ -108,7 +110,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
         check_context_ndims(ctx_dicts[0])
 
         # Get initial decoder state (N*H)
-        h_ts = [f_init(ctx_dict) for f_init, ctx_dict in zip(f_inits, ctx_dicts)]
+        h_ts = [f_init(ctx_dict, wait_k) for f_init, ctx_dict in zip(f_inits, ctx_dicts)]
 
         # we always have <bos> tokens except that the returned embeddings
         # may differ from one model to another.
@@ -123,7 +125,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
             #        batch_size*beam_size x vocab_size (t > 0)
             # NOTE: get_emb does not exist in some models, fix this.
             log_ps, h_ts = zip(
-                *[f_next(cd, dec.get_emb(idxs, tstep), h_t[tile]) for
+                *[f_next(cd, dec.get_emb(idxs, tstep), h_t[tile], wait_k) for
                   f_next, dec, cd, h_t in zip(f_nexts, decs, ctx_dicts, h_ts)])
 
             # Do the actual averaging of log-probabilities
@@ -164,6 +166,9 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
             if tstep > 0:
                 # Permute all hypothesis history according to new order
                 beam[:tstep] = beam[:tstep].gather(2, pdxs.repeat(tstep, 1, 1))
+
+            if wait_k is not None:
+                wait_k += 1
 
         # Put an explicit <eos> to make idxs_to_sent happy
         beam[max_len - 1] = eos
