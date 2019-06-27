@@ -58,6 +58,7 @@ class NMT(nn.Module):
             'bos_type': 'emb',          # 'emb': default learned emb
             'bos_activ': None,          #
             'bos_dim': None,            #
+            'wait_k': None,            #
         }
 
     def __init__(self, opts):

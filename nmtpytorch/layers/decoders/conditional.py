@@ -19,7 +19,7 @@ class ConditionalDecoder(nn.Module):
                  att_activ='tanh', att_bottleneck='ctx', att_temp=1.0,
                  transform_ctx=True, mlp_bias=False, dropout_out=0,
                  emb_maxnorm=None, emb_gradscale=False, sched_sample=0,
-                 bos_type='emb', bos_dim=None, bos_activ=None, bos_bias=False):
+                 bos_type='emb', bos_dim=None, bos_activ=None, bos_bias=False, wait_k=None):
         super().__init__()
 
         # Normalize case
@@ -71,6 +71,7 @@ class ConditionalDecoder(nn.Module):
         self.bos_dim = bos_dim
         self.bos_activ = bos_activ
         self.bos_bias = bos_bias
+        self.wait_k = wait_k
 
         if self.bos_type == 'feats':
             # Learn a <bos> embedding
@@ -235,11 +236,10 @@ class ConditionalDecoder(nn.Module):
 
         loss = 0.0
 
-        wait_k = 4
         if 'image' in ctx_dict:
-            wait_k_ctx_dict = {key: [value[0][:wait_k], value[1]] for key, value in ctx_dict.items()}
+            wait_k_ctx_dict = {key: [value[0][:self.wait_k], value[1]] for key, value in ctx_dict.items()}
         else:
-            wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
+            wait_k_ctx_dict = {key: [value[0][:self.wait_k], value[1][:self.wait_k]] for key, value in ctx_dict.items()}
 
         # Get initial hidden state
         h = self.f_init(wait_k_ctx_dict)
@@ -256,11 +256,12 @@ class ConditionalDecoder(nn.Module):
         y_emb = self.emb(y[1:])
 
         for t in range(y_emb.shape[0] - 1):
-            wait_k += 1
+            if self.wait_k is not None:
+                self.wait_k += 1
             if 'image' in ctx_dict:
-                wait_k_ctx_dict = {key: [value[0][:wait_k], value[1]] for key, value in ctx_dict.items()}
+                wait_k_ctx_dict = {key: [value[0][:self.wait_k], value[1]] for key, value in ctx_dict.items()}
             else:
-                wait_k_ctx_dict = {key: [value[0][:wait_k], value[1][:wait_k]] for key, value in ctx_dict.items()}
+                wait_k_ctx_dict = {key: [value[0][:self.wait_k], value[1][:self.wait_k]] for key, value in ctx_dict.items()}
             emb = self.emb(log_p.argmax(1)) if sched else y_emb[t]
             log_p, h = self.f_next(wait_k_ctx_dict, emb, h)
             loss += self.nll_loss(log_p, y[t + 2])
