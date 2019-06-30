@@ -280,7 +280,8 @@ class MainLoop:
             hyps = beam_search([self.net], self.beam_iterator,
                                task_id=task,
                                beam_size=self.eval_beam,
-                               max_len=self.eval_max_len)
+                               max_len=self.eval_max_len,
+                               wait_k=self.model.opts.model['wait_k'])
             beam_time = time.time() - beam_time
 
             # Compute metrics and update results

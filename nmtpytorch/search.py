@@ -22,7 +22,7 @@ def check_context_ndims(ctx_dict):
 
 
 def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
-                lp_alpha=0., suppress_unk=False, n_best=False):
+                lp_alpha=0., suppress_unk=False, n_best=False, wait_k=None):
     """An efficient implementation for beam-search algorithm.
 
     Arguments:
@@ -108,13 +108,15 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
         check_context_ndims(ctx_dicts[0])
 
         # Get initial decoder state (N*H)
-        h_ts = [f_init(ctx_dict) for f_init, ctx_dict in zip(f_inits, ctx_dicts)]
+        h_ts = [f_init(ctx_dict, wait_k) for f_init, ctx_dict in zip(f_inits, ctx_dicts)]
 
         # we always have <bos> tokens except that the returned embeddings
         # may differ from one model to another.
         idxs = models[0].get_bos(batch.size).to(DEVICE)
 
         for tstep in range(max_len):
+            if wait_k is not None:
+                wait_k += 1
             # Select correct positions from source context
             ctx_dicts = [tile_ctx_dict(cd, tile) for cd in ctx_dicts]
 
@@ -123,7 +125,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
             #        batch_size*beam_size x vocab_size (t > 0)
             # NOTE: get_emb does not exist in some models, fix this.
             log_ps, h_ts = zip(
-                *[f_next(cd, dec.get_emb(idxs, tstep), h_t[tile]) for
+                *[f_next(cd, dec.get_emb(idxs, tstep), h_t[tile], wait_k) for
                   f_next, dec, cd, h_t in zip(f_nexts, decs, ctx_dicts, h_ts)])
 
             # Do the actual averaging of log-probabilities
