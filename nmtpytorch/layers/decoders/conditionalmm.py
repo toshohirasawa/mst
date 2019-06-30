@@ -35,16 +35,17 @@ class ConditionalMMDecoder(ConditionalDecoder):
             att_activ=self.att_activ,
             att_bottleneck=self.att_bottleneck)
 
-    def f_next(self, ctx_dict, y, h):
+    def f_next(self, ctx_dict, y, h, wait_k):
+        wait_k_ctx_dict = self._wait_k_encoder_hidden_states(ctx_dict, wait_k)
         # Get hidden states from the first decoder (purely cond. on LM)
         h1_c1 = self.dec0(y, self._rnn_unpack_states(h))
         h1 = get_rnn_hidden_state(h1_c1)
 
         # Apply attention
         self.txt_alpha_t, txt_z_t = self.txt_att(
-            h1.unsqueeze(0), *ctx_dict[self.ctx_name])
+            h1.unsqueeze(0), *wait_k_ctx_dict[self.ctx_name])
         self.img_alpha_t, img_z_t = self.img_att(
-            h1.unsqueeze(0), *ctx_dict[self.aux_ctx_name])
+            h1.unsqueeze(0), *wait_k_ctx_dict[self.aux_ctx_name])
         # Save for reg loss terms
         self.history['alpha_img'].append(self.img_alpha_t.unsqueeze(0))
 
