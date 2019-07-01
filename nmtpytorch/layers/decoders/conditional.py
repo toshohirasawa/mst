@@ -185,7 +185,7 @@ class ConditionalDecoder(nn.Module):
 
     def _wait_k_encoder_hidden_states(self, ctx_dict, wait_k):
         if 'image' in ctx_dict:
-            return {key: [value[0][:self.wait_k], value[1]] for key, value in ctx_dict.items()}
+            return {self.ctx_name: [ctx_dict[self.ctx_name][0][:self.wait_k], ctx_dict[self.ctx_name][1]], 'image': ctx_dict['image']}
         else:
             return {key: [value[0][:self.wait_k], value[1][:self.wait_k]] for key, value in ctx_dict.items()}
 

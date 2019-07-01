@@ -66,7 +66,8 @@ class AttentiveMNMTFeatures(NMT):
             att_bottleneck=self.opts.model['att_bottleneck'],
             dropout_out=self.opts.model['dropout_out'],
             emb_maxnorm=self.opts.model['emb_maxnorm'],
-            emb_gradscale=self.opts.model['emb_gradscale'])
+            emb_gradscale=self.opts.model['emb_gradscale'],
+            wait_k=self.opts.model['wait_k'])
 
         # Share encoder and decoder weights
         if self.opts.model['tied_emb'] == '3way':

@@ -89,7 +89,8 @@ class MultimodalNMT(NMT):
             dropout_out=self.opts.model['dropout_out'],
             emb_maxnorm=self.opts.model['emb_maxnorm'],
             emb_gradscale=self.opts.model['emb_gradscale'],
-            sched_sample=self.opts.model['sched_sampling'])
+            sched_sample=self.opts.model['sched_sampling'],
+            wait_k=self.opts.model['wait_k'])
 
         # Share encoder and decoder weights
         if self.opts.model['tied_emb'] == '3way':
