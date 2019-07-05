@@ -44,7 +44,7 @@ class BiLSTMp(nn.Module):
         self.n_layers = len(self.layers)
 
         # Doubles its size because of concatenation of forw-backw encs
-        self.ctx_size = self.hidden_size * 2
+        self.ctx_size = self.hidden_size
 
         # Fill 0-vector as <eos> to the end of the frames
         self.pad_tuple = (0, 0, 0, 0, 0, 1)
@@ -60,7 +60,7 @@ class BiLSTMp(nn.Module):
             # Add LSTMs
             self.lstms.append(nn.LSTM(
                 self.input_size if i == 0 else self.hidden_size,
-                self.hidden_size * 2, bidirectional=False))
+                self.hidden_size, bidirectional=False))
             # Add non-linear bottlenecks
             self.ffs.append(FF(
                 self.ctx_size, self.proj_size, activ=self.proj_activ))
