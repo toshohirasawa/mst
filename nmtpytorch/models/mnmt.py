@@ -67,7 +67,8 @@ class MultimodalNMT(NMT):
             layer_norm=self.opts.model['enc_lnorm'],
             feat_size=self.opts.model['feat_dim'],
             feat_activ=self.opts.model['feat_activ'],
-            feat_fusion=self.opts.model['feat_fusion'])
+            feat_fusion=self.opts.model['feat_fusion'],
+            bidirectional=self.opts.model['bidirectional'])
 
         self.dec = ConditionalDecoder(
             input_size=self.opts.model['emb_dim'],
