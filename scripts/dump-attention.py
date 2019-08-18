@@ -25,12 +25,6 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output', type=str,
                        help='output file name.')
 
-    # Visualize attention
-    parser.add_argument('--image_split', required=False, type=str,
-                       help='image-split file name')
-    parser.add_argument('--images', required=False, type=str,
-                       help='images directory')
-
     args = parser.parse_args()
     translator = Translator(models=[args.model], splits=args.split,
                             source=None, disable_filters=True, override=None,

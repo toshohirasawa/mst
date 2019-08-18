@@ -52,6 +52,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
     max_batch_size = data_loader.batch_sampler.batch_size
     k = beam_size
     inf = -1000
+    init_wait_k = wait_k
     results = []
     enc_args = {}
 
@@ -87,6 +88,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
     nll_storage = torch.zeros(max_batch_size, device=DEVICE)
 
     for batch in pbar(data_loader, unit='batch'):
+        wait_k = init_wait_k
         batch.device(DEVICE)
 
         # Always use the initial storage
