@@ -22,7 +22,7 @@ def check_context_ndims(ctx_dict):
 
 
 def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
-                lp_alpha=0., suppress_unk=False, n_best=False, wait_k=None):
+                lp_alpha=0., suppress_unk=False, n_best=False, init_wait_k=None):
     """An efficient implementation for beam-search algorithm.
 
     Arguments:
@@ -87,6 +87,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
     nll_storage = torch.zeros(max_batch_size, device=DEVICE)
 
     for batch in pbar(data_loader, unit='batch'):
+        wait_k = init_wait_k
         batch.device(DEVICE)
 
         # Always use the initial storage
