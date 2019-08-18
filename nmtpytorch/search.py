@@ -22,7 +22,7 @@ def check_context_ndims(ctx_dict):
 
 
 def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
-                lp_alpha=0., suppress_unk=False, n_best=False, init_wait_k=None):
+                lp_alpha=0., suppress_unk=False, n_best=False, wait_k=None):
     """An efficient implementation for beam-search algorithm.
 
     Arguments:
@@ -52,6 +52,7 @@ def beam_search(models, data_loader, task_id=None, beam_size=12, max_len=200,
     max_batch_size = data_loader.batch_sampler.batch_size
     k = beam_size
     inf = -1000
+    init_wait_k = wait_k
     results = []
     enc_args = {}
 
