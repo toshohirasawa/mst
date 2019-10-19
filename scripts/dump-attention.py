@@ -11,7 +11,6 @@ from nmtpytorch.translator import Translator
 from nmtpytorch.utils.data import make_dataloader
 
 
-
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         prog='nmtpy-dump-attention',
@@ -39,8 +38,12 @@ if __name__ == '__main__':
 
     torch.set_grad_enabled(False)
 
+    wait_k = getattr(model.dec, 'wait_k', None)
+
     # Greedy search
     for batch in tqdm.tqdm(loader, unit='batch'):
+        this_wait_k = wait_k
+
         # Visual attention (may not be available)
         img_att = [[] for i in range(batch.size)]
 
@@ -56,13 +59,17 @@ if __name__ == '__main__':
         ctx_dict = model.encode(batch)
 
         # Get initial hidden state
-        h_t = model.dec.f_init(ctx_dict)
+        h_t = model.dec.f_init(ctx_dict, wait_k=this_wait_k)
 
-        y_t = model.get_bos(batch.size)
+        y_t = model.get_bos(batch.size).unsqueeze(1)
 
         # Iterate for 100 timesteps
         for t in range(100):
-            logp, h_t = model.dec.f_next(ctx_dict, model.dec.get_emb(y_t, t).squeeze(), h_t)
+            if this_wait_k is not None:
+                this_wait_k += 1
+
+            emb_y_t = model.dec.get_emb(y_t, t).squeeze(1)
+            logp, h_t = model.dec.f_next(ctx_dict, emb_y_t , h_t, wait_k=this_wait_k)
 
             # text attention
             tatt = model.dec.txt_alpha_t.data.clone().numpy()
